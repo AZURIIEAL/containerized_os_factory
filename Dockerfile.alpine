@@ -1,0 +1,100 @@
+# =========================================================
+# Alpine Linux XFCE + VNC + noVNC Desktop Environment
+# =========================================================
+
+FROM alpine:latest
+
+LABEL maintainer="AZURIIEAL <abinbinu678@gmail.com>"
+
+# -----------------------------
+# Build arguments (safe defaults)
+# -----------------------------
+ARG USER_NAME=azuriieal
+ARG USER_PASSWORD=1234
+ARG VNC_PASSWORD=123456
+ARG DISPLAY_NUM=99
+
+# -----------------------------
+# Install required packages
+# -----------------------------
+RUN apk update && apk add --no-cache \
+    sudo \
+    git \
+    bash \
+    python3 \
+    xfce4 \
+    xfce4-terminal \
+    tigervnc \
+    firefox-esr \
+    dbus \
+    dbus-x11 \
+    ttf-dejavu \
+    adwaita-icon-theme \
+    faenza-icon-theme \
+    && rm -rf /var/cache/apk/*
+
+# -----------------------------
+# Create non-root user
+# -----------------------------
+RUN adduser -D -h /home/${USER_NAME} -s /bin/bash ${USER_NAME} \
+    && echo -e "${USER_PASSWORD}\n${USER_PASSWORD}" | passwd ${USER_NAME} \
+    && echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# -----------------------------
+# Install noVNC + websockify
+# -----------------------------
+RUN git clone https://github.com/novnc/noVNC.git /opt/noVNC \
+    && git clone https://github.com/novnc/websockify.git /opt/noVNC/utils/websockify
+
+# -----------------------------
+# Switch to normal user
+# -----------------------------
+USER ${USER_NAME}
+WORKDIR /home/${USER_NAME}
+
+# -----------------------------
+# Configure VNC
+# -----------------------------
+RUN mkdir -p ~/.vnc \
+    && echo -e "#!/bin/bash\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4 &" > ~/.vnc/xstartup \
+    && chmod +x ~/.vnc/xstartup \
+    && echo -e "${VNC_PASSWORD}\n${VNC_PASSWORD}\nn\n" | vncpasswd
+
+# -----------------------------
+# Switch back to root for entrypoint
+# -----------------------------
+USER root
+
+# -----------------------------
+# Create entrypoint script
+# -----------------------------
+RUN cat <<EOF > /home/${USER_NAME}/entry.sh
+#!/bin/bash
+set -e
+
+# Start VNC server
+/usr/bin/vncserver :${DISPLAY_NUM} -geometry 1280x800 -localhost no
+
+# Start noVNC proxy
+exec /opt/noVNC/utils/novnc_proxy --vnc 127.0.0.1:59${DISPLAY_NUM} --listen 6080
+EOF
+
+RUN chmod +x /home/${USER_NAME}/entry.sh \
+    && chown ${USER_NAME}:${USER_NAME} /home/${USER_NAME}/entry.sh
+
+# -----------------------------
+# Runtime user
+# -----------------------------
+USER ${USER_NAME}
+
+# -----------------------------
+# Expose correct ports
+# -----------------------------
+# VNC :99 -> 5999
+# noVNC Web -> 6080
+EXPOSE 5999 6080
+
+# -----------------------------
+# Start container
+# -----------------------------
+CMD ["/bin/bash", "/home/azuriieal/entry.sh"]

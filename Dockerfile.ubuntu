@@ -1,0 +1,34 @@
+# Use Ubuntu base
+FROM ubuntu:latest
+
+LABEL maintainer="AZURIIEAL <abinbinu678@gmail.com>"
+
+# Install essentials
+RUN apt update && apt install -y \
+    sudo git xfce4 xfce4-terminal tigervnc-standalone-server tigervnc-common novnc websockify python3-pip firefox dbus-x11 \
+    && apt clean && rm -rf /var/lib/apt/lists/*
+
+# Create user
+RUN useradd -m -s /bin/bash azuriieal && echo "azuriieal:1234" | chpasswd && \
+    echo 'azuriieal ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+USER azuriieal
+WORKDIR /home/azuriieal
+
+# Configure VNC and XFCE startup
+RUN mkdir -p ~/.vnc && \
+    echo -e "#!/bin/bash\nstartxfce4 &" > ~/.vnc/xstartup && \
+    chmod +x ~/.vnc/xstartup && \
+    echo "123456" | vncpasswd -f > ~/.vnc/passwd && \
+    chmod 600 ~/.vnc/passwd
+
+# Add entry script inline
+USER root
+RUN echo '#!/bin/bash\n' \
+         '/usr/bin/vncserver :99 -localhost no &\n' \
+         '/usr/share/novnc/utils/novnc_proxy --vnc 127.0.0.1:5999 --listen 6080' \
+         > /entry.sh && chmod +x /entry.sh
+
+USER azuriieal
+
+CMD ["/bin/bash", "/entry.sh"]
