@@ -1,0 +1,11 @@
+services:
+  alpine:
+    build:
+      context: ./distros/alpine
+      dockerfile: Dockerfile
+    ports:
+      - "6081:6080"
+    environment:
+      - USER_NAME=azuriieal
+      - USER_PASSWORD=1234
+      - VNC_PASSWORD=123456
